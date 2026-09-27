@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pong</title>
+<style>
+    * {
+        box-sizing: border-box;
+    }
+
+    body {
+        margin: 0;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #10131a;
+        color: white;
+        font-family: Arial, sans-serif;
+    }
+
+    #gameBox {
+        text-align: center;
+    }
+
+    h1 {
+        margin: 0 0 8px;
+        letter-spacing: 6px;
+        font-size: 34px;
+    }
+
+    canvas {
+        display: block;
+        background: #05070b;
+        border: 4px solid #ffffff;
+        box-shadow: 0 0 22px #30dfff;
+        max-width: 95vw;
+        height: auto;
+    }
+
+    #instructions {
+        margin-top: 12px;
+        line-height: 1.6;
+        color: #d7e0ea;
+    }
+
+    kbd {
+        padding: 2px 7px;
+        color: #111;
+        background: white;
+        border-radius: 4px;
+        font-weight: bold;
+    }
+</style>
+</head>
+<body>
+<div id="gameBox">
+    <h1>PONG</h1>
+    <canvas id="game" width="900" height="500"></canvas>
+
+    <div id="instructions">
+        Move: <kbd>W</kbd> / <kbd>S</kbd> or <kbd>↑</kbd> / <kbd>↓</kbd>
+        &nbsp; | &nbsp;
+        First to 7 wins
+        &nbsp; | &nbsp;
+        <kbd>Space</kbd> starts or restarts
+    </div>
+</div>
+
+<script>
+"use strict";
+
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+
+const WIDTH = canvas.width;
+const HEIGHT = canvas.height;
+
+const paddleWidth = 16;
+const paddleHeight = 105;
+const paddleSpeed = 8;
+const ballSize = 16;
+const winningScore = 7;
+
+const keys = {};
+
+const player = {
+    x: 35,
+    y: HEIGHT / 2 - paddleHeight / 2,
+    width: paddleWidth,
+    height: paddleHeight,
+    score: 0
+};
+
+const computer = {
+    x: WIDTH - 35 - paddleWidth,
+    y: HEIGHT / 2 - paddleHeight / 2,
+    width: paddleWidth,
+    height: paddleHeight,
+    score: 0,
+    speed: 5.1
+};
+
+const ball = {
+    x: WIDTH / 2 - ballSize / 2,
+    y: HEIGHT / 2 - ballSize / 2,
+    width: ballSize,
+    height: ballSize,
+    speed: 6,
+    vx: 0,
+    vy: 0
+};
+
+let gameState = "start";
+let winnerText = "";
+
+window.addEventListener("keydown", function (event) {
+    keys[event.key.toLowerCase()] = true;
+
+    if (
+        event.key === "ArrowUp" ||
+        event.key === "ArrowDown" ||
+        event.key === " " ||
+        event.key.toLowerCase() === "w" ||
+        event.key.toLowerCase() === "s"
+    ) {
+        event.preventDefault();
+    }
+
+    if (event.key === " ") {
+        if (gameState === "start" || gameState === "gameover") {
+            startGame();
+        }
+    }
+});
+
+window.addEventListener("keyup", function (event) {
+    keys[event.key.toLowerCase()] = false;
+});
+
+function resetBall(direction) {
+    ball.x = WIDTH / 2 - ball.width / 2;
+    ball.y = HEIGHT / 2 - ball.height / 2;
+    ball.speed = 6;
+
+    const angle = (Math.random() * 0.8 - 0.4);
+    ball.vx = Math.cos(angle) * ball.speed * direction;
+    ball.vy = Math.sin(angle) * ball.speed;
+}
+
+function startGame() {
+    player.score = 0;
+    computer.score = 0;
+
+    player.y = HEIGHT / 2 - player.height / 2;
+    computer.y = HEIGHT / 2 - computer.height / 2;
+
+    gameState = "playing";
+    winnerText = "";
+    resetBall(Math.random() < 0.5 ? -1 : 1);
+}
+
+function scorePoint(scoredBy) {
+    if (scoredBy === "player") {
+        player.score++;
+        resetBall(1);
+    } else {
+        computer.score++;
+        resetBall(-1);
+    }
+
+    if (player.score >= winningScore || computer.score >= winningScore) {
+        gameState = "gameover";
+        winnerText = player.score >= winningScore ? "YOU WIN!" : "COMPUTER WINS!";
+        ball.vx = 0;
+        ball.vy = 0;
+    }
+}
+
+function clampPaddles() {
+    player.y = Math.max(0, Math.min(HEIGHT - player.height, player.y));
+    computer.y = Math.max(0, Math.min(HEIGHT - computer.height, computer.y));
+}
+
+function rectanglesTouch(a, b) {
+    return (
+        a.x < b.x + b.width &&
+        a.x + a.width > b.x &&
+        a.y < b.y + b.height &&
+        a.y + a.height > b.y
+    );
+}
+
+function movePlayer() {
+    if (keys["w"] || keys["arrowup"]) {
+        player.y -= paddleSpeed;
+    }
+
+    if (keys["s"] || keys["arrowdown"]) {
+        player.y += paddleSpeed;
+    }
+}
+
+function moveComputer() {
+    const computerCenter = computer.y + computer.height / 2;
+    const ballCenter = ball.y + ball.height / 2;
+
+    if (ballCenter < computerCenter - 12) {
+        computer.y -= computer.speed;
+    } else if (ballCenter > computerCenter + 12) {
+        computer.y += computer.speed;
+    }
+}
+
+function bounceOffPaddle(paddle, goesRight) {
+    const paddleCenter = paddle.y + paddle.height / 2;
+    const ballCenter = ball.y + ball.height / 2;
+    const hitPosition = (ballCenter - paddleCenter) / (paddle.height / 2);
+
+    ball.speed = Math.min(ball.speed + 0.45, 14);
+    ball.vx = Math.abs(Math.cos(hitPosition * 0.9) * ball.speed) * (goesRight ? 1 : -1);
+    ball.vy = Math.sin(hitPosition * 1.15) * ball.speed;
+
+    if (goesRight) {
+        ball.x = paddle.x + paddle.width;
+    } else {
+        ball.x = paddle.x - ball.width;
+    }
+}
+
+function updateBall() {
+    ball.x += ball.vx;
+    ball.y += ball.vy;
+
+    if (ball.y <= 0) {
+        ball.y = 0;
+        ball.vy *= -1;
+    }
+
+    if (ball.y + ball.height >= HEIGHT) {
+        ball.y = HEIGHT - ball.height;
+        ball.vy *= -1;
+    }
+
+    if (rectanglesTouch(ball, player) && ball.vx < 0) {
+        bounceOffPaddle(player, true);
+    }
+
+    if (rectanglesTouch(ball, computer) && ball.vx > 0) {
+        bounceOffPaddle(computer, false);
+    }
+
+    if (ball.x + ball.width < 0) {
+        scorePoint("computer");
+    }
+
+    if (ball.x > WIDTH) {
+        scorePoint("player");
+    }
+}
+
+function update() {
+    if (gameState !== "playing") {
+        return;
+    }
+
+    movePlayer();
+    moveComputer();
+    clampPaddles();
+    updateBall();
+}
+
+function drawCenterLine() {
+    ctx.fillStyle = "#526170";
+
+    for (let y = 12; y < HEIGHT; y += 28) {
+        ctx.fillRect(WIDTH / 2 - 3, y, 6, 16);
+    }
+}
+
+function drawPaddle(paddle, color) {
+    ctx.fillStyle = color;
+    ctx.fillRect(paddle.x, paddle.y, paddle.width, paddle.height);
+}
+
+function drawText(text, x, y, size, color, align) {
+    ctx.fillStyle = color;
+    ctx.font = "bold " + size + "px Arial";
+    ctx.textAlign = align || "center";
+    ctx.fillText(text, x, y);
+}
+
+function drawOverlay(title, subtitle) {
+    ctx.fillStyle = "rgba(0, 0, 0, 0.68)";
+    ctx.fillRect(0, 0, WIDTH, HEIGHT);
+
+    drawText(title, WIDTH / 2, HEIGHT / 2 - 20, 44, "#ffffff");
+    drawText(subtitle, WIDTH / 2, HEIGHT / 2 + 30, 22, "#76e8ff");
+}
+
+function draw() {
+    ctx.clearRect(0, 0, WIDTH, HEIGHT);
+
+    ctx.fillStyle = "#05070b";
+    ctx.fillRect(0, 0, WIDTH, HEIGHT);
+
+    drawCenterLine();
+
+    drawText(player.score, WIDTH * 0.25, 70, 52, "#ffffff");
+    drawText(computer.score, WIDTH * 0.75, 70, 52, "#ffffff");
+
+    drawPaddle(player, "#35e9ff");
+    drawPaddle(computer, "#ff4b78");
+
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(ball.x, ball.y, ball.width, ball.height);
+
+    if (gameState === "start") {
+        drawOverlay("PONG", "Press SPACE to begin");
+    }
+
+    if (gameState === "gameover") {
+        drawOverlay(winnerText, "Press SPACE to play again");
+    }
+}
+
+function gameLoop() {
+    update();
+    draw();
+    requestAnimationFrame(gameLoop);
+}
+
+gameLoop();
+</script>
+</body>
+</html>
